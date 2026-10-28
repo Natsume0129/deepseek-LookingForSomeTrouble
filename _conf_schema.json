@@ -1,4 +1,11 @@
 {
+  "group_sessions": {
+    "description": "允许主动请求找内容的群聊",
+    "type": "list",
+    "items": {"type": "string"},
+    "default": [],
+    "hint": "填写 机器人ID:GroupMessage:群号，并加入AstrBot白名单。支持管理员指令和模型自主调用，结果发回该群；定时随机分享仍只发私聊。"
+  },
   "show_source": {
     "description": "展示来源链接",
     "type": "bool",

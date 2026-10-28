@@ -21,11 +21,10 @@ WhaleDiscovery = importlib.import_module('discovery_command_test.main').WhaleDis
 
 
 class ManualCommand(unittest.IsolatedAsyncioTestCase):
-    async def run_command(self, item):
+    async def run_command(self, item, target='demo:FriendMessage:10001'):
         plugin = object.__new__(WhaleDiscovery)
-        target = 'demo:FriendMessage:10001'
         plugin.engine = types.SimpleNamespace(
-            config={'recipients': [target]}, now=Mock(), can_send=Mock(return_value=True),
+            config={'recipients': ['demo:FriendMessage:10001'], 'group_sessions':['demo:GroupMessage:20001']}, now=Mock(), can_send=Mock(return_value=True),
             prepare=AsyncMock(return_value=item), dispatch=AsyncMock(return_value=True),
         )
         plugin.allowed = Mock(return_value=True)
@@ -58,6 +57,11 @@ class ManualCommand(unittest.IsolatedAsyncioTestCase):
         plugin, event = await self.run_command(None)
         self.assertEqual(event.send.await_count, 2)
         plugin.engine.dispatch.assert_not_awaited()
+
+    async def test_command_uses_current_group(self):
+        plugin,event=await self.run_command({'title':'Test'},target='demo:GroupMessage:20001')
+        plugin.engine.prepare.assert_awaited_once_with('demo:GroupMessage:20001')
+        plugin.engine.dispatch.assert_awaited_once()
 
 
 class ShareDelivery(unittest.IsolatedAsyncioTestCase):
@@ -131,6 +135,14 @@ class DiscoveryTool(unittest.IsolatedAsyncioTestCase):
         self.event.unified_msg_origin='demo:GroupMessage:20001'
         await self.plugin.discover_fresh_content(self.event)
         self.plugin.engine.prepare.assert_not_awaited()
+
+    async def test_tool_uses_allowed_current_group(self):
+        target='demo:GroupMessage:20001'
+        self.plugin.engine.config['group_sessions']=[target]
+        self.event.unified_msg_origin=target
+        await self.plugin.discover_fresh_content(self.event,'游戏')
+        self.plugin.engine.prepare.assert_awaited_once_with(target,topic='游戏')
+        self.plugin.engine.dispatch.assert_awaited_once()
 
 
 class SharedContext(unittest.IsolatedAsyncioTestCase):

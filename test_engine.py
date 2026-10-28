@@ -127,6 +127,17 @@ class SharingLimits(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(await self.engine.dispatch(self.item(),manual=True))
         self.assertEqual(self.sent,[])
 
+    async def test_group_manual_shares_cap_but_is_not_scheduled(self):
+        target='demo:GroupMessage:20001'
+        self.engine.config['group_sessions']=[target]
+        item=self.item(1);item['target']=target
+        self.assertFalse(await self.engine.dispatch(item))
+        self.assertTrue(await self.engine.dispatch(item,manual=True))
+        self.assertTrue(await self.engine.dispatch(self.item(2),manual=True))
+        self.assertTrue(await self.engine.dispatch(self.item(3),manual=True))
+        self.assertFalse(await self.engine.dispatch(self.item(4),manual=True))
+        self.assertEqual(self.sent[0]['target'],target)
+
     async def test_only_selected_sources_are_fetched(self):
         self.engine.config['sources']=['nasa']
         with patch('engine.fetch',new_callable=AsyncMock,return_value=(b'<rss><channel/></rss>','https://www.nasa.gov/feed/')) as mocked:

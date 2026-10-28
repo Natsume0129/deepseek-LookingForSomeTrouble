@@ -9,7 +9,7 @@ from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools
 
-from .engine import Discovery
+from .engine import Discovery, target_configured
 
 
 class WhaleDiscovery(Star):
@@ -115,8 +115,8 @@ class WhaleDiscovery(Star):
     @filter.on_llm_request()
     async def remember_share(self, event: AstrMessageEvent, req: ProviderRequest):
         target = event.unified_msg_origin
-        if (self.engine.config.get('enabled') and ':FriendMessage:' in target
-                and target in self.engine.config['recipients'] and self.allowed(target)):
+        if (self.engine.config.get('enabled') and target_configured(target, self.engine.config, manual=True)
+                and self.allowed(target)):
             req.system_prompt = (req.system_prompt or '') + (
                 '\n你可以调用 discover_fresh_content 从订阅信源找真实的新鲜内容。'
                 '当对方问最近有啥好玩的、想看新鲜事、找点好吃的或类似问题，且你判断需要外界内容时，自主决定调用。'
@@ -147,8 +147,8 @@ class WhaleDiscovery(Star):
     async def discover_now(self, event: AstrMessageEvent):
         event.stop_event()
         target = event.unified_msg_origin
-        if ':FriendMessage:' not in target or target not in self.engine.config['recipients'] or not self.allowed(target):
-            await event.send(event.plain_result('请用接收者列表和白名单中的管理员账号私聊我，发送 /找点事情。'))
+        if not target_configured(target, self.engine.config, manual=True) or not self.allowed(target):
+            await event.send(event.plain_result('请先将当前私聊或群聊加入插件允许列表和AstrBot白名单，再由管理员发送 /找点事情。'))
             return
         if self.manual_lock.locked():
             await event.send(event.plain_result('正在找内容，等这次完成再试。'))
@@ -180,8 +180,8 @@ class WhaleDiscovery(Star):
             topic(string): 本次想找的内容，如新奇小游戏、诱人的甜点；泛泛找新鲜事时留空。
         """
         target = event.unified_msg_origin
-        if ':FriendMessage:' not in target or target not in self.engine.config['recipients'] or not self.allowed(target):
-            return '当前会话不在允许的私聊接收者列表中，未执行搜索或发送。'
+        if not target_configured(target, self.engine.config, manual=True) or not self.allowed(target):
+            return '当前会话不在允许的私聊或群聊列表中，未执行搜索或发送。'
         previous = event.get_extra('whale_discovery_tool_result')
         if previous:
             return previous
