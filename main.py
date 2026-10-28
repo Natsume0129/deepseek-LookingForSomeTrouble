@@ -120,6 +120,7 @@ class WhaleDiscovery(Star):
             req.system_prompt = (req.system_prompt or '') + (
                 '\n你可以调用 discover_fresh_content 从订阅信源找真实的新鲜内容。'
                 '当对方问最近有啥好玩的、想看新鲜事、找点好吃的或类似问题，且你判断需要外界内容时，自主决定调用。'
+                '对方明确让你找新内容时，先实际调用一次再回答，不要以人设懒惰或主观猜测拒绝。'
                 '普通闲聊、回忆过去、用户明确不想看时不要调用。每轮最多一次。'
                 '工具会直接发送图片和短句；成功后不要重复转述。没有结果或额度受限就如实说明，不能编造已搜索到的内容。'
             )
@@ -142,13 +143,15 @@ class WhaleDiscovery(Star):
                 '历史中的时间和主题标记用于理解上下文，不要复述这些标记。'
             )
 
-    @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command('找点事情')
     async def discover_now(self, event: AstrMessageEvent):
         event.stop_event()
         target = event.unified_msg_origin
+        if ":FriendMessage:" in target and not event.is_admin():
+            await event.send(event.plain_result("私聊手动指令仅管理员可用；已授权群的成员都可以使用。"))
+            return
         if not target_configured(target, self.engine.config, manual=True) or not self.allowed(target):
-            await event.send(event.plain_result('请先将当前私聊或群聊加入插件允许列表和AstrBot白名单，再由管理员发送 /找点事情。'))
+            await event.send(event.plain_result('请先将当前聊天加入插件允许列表和AstrBot白名单。已授权群的成员都可以使用 /找点事情。'))
             return
         if self.manual_lock.locked():
             await event.send(event.plain_result('正在找内容，等这次完成再试。'))
@@ -159,7 +162,7 @@ class WhaleDiscovery(Star):
         async with self.manual_lock:
             await event.send(event.plain_result('我去翻翻有什么有意思的，找到就发给你。'))
             try:
-                item = await self.engine.prepare(target)
+                item = await self.engine.prepare(target, on_demand=True)
                 if item is None:
                     await event.send(event.plain_result('这次没有挑到合适的新内容，晚点再试吧。'))
                 elif not await self.engine.dispatch(item, manual=True):
@@ -194,7 +197,7 @@ class WhaleDiscovery(Star):
         event.set_extra('whale_discovery_tool_result', '本轮已经请求找内容，请勿重复调用。')
         async with self.manual_lock:
             try:
-                item = await self.engine.prepare(target, topic=topic.strip()[:300])
+                item = await self.engine.prepare(target, topic=topic.strip()[:300], on_demand=True)
                 if item is None:
                     result = '读取订阅信源后没有挑到符合本次主题的新内容，没有发送分享；请自然说明，不要编造。'
                 elif await self.engine.dispatch(item, manual=True):

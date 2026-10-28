@@ -171,6 +171,19 @@ class SharingLimits(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('https://',result['text'])
         self.assertEqual(result['url'],article['url'])
 
+    async def test_requested_score_is_less_strict_than_scheduled(self):
+        article=dict(title='Test',url='https://www.nasa.gov/example',category='太空自然',source='NASA')
+        self.engine.candidates=AsyncMock(return_value=[article])
+        self.engine.persona=AsyncMock(return_value='随意聊天')
+        html=('<article>'+('Article facts. '*25)+'</article>').encode()
+        verdict='{"share":true,"interesting":7,"messages":["欸你看","有点意思"],"meme_category":""}'
+        with patch('engine.fetch',new_callable=AsyncMock,return_value=(html,article['url'])):
+            self.engine.generate=AsyncMock(side_effect=['{"indices":[0]}',verdict])
+            self.assertIsNone(await self.engine.prepare(self.config['recipients'][0]))
+            self.engine.generate=AsyncMock(side_effect=['{"indices":[0]}',verdict])
+            self.assertIsNotNone(await self.engine.prepare(self.config['recipients'][0],on_demand=True))
+        self.engine.candidates.assert_awaited_with(limit=20)
+
 
 if __name__=='__main__':
     unittest.main()

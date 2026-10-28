@@ -37,7 +37,7 @@ class ManualCommand(unittest.IsolatedAsyncioTestCase):
             stopped = True
 
         event = types.SimpleNamespace(
-            unified_msg_origin=target, stop_event=stop, send=AsyncMock(),
+            unified_msg_origin=target, stop_event=stop, send=AsyncMock(), is_admin=lambda: False if ":GroupMessage:" in target else True,
             plain_result=lambda text: MessageEventResult().message(text), set_result=Mock(),
         )
         # The real pipeline stops iterating after a yielded result marks the event stopped.
@@ -50,7 +50,7 @@ class ManualCommand(unittest.IsolatedAsyncioTestCase):
         item = {'title': 'Test article'}
         plugin, event = await self.run_command(item)
         event.send.assert_awaited_once()
-        plugin.engine.prepare.assert_awaited_once_with(event.unified_msg_origin)
+        plugin.engine.prepare.assert_awaited_once_with(event.unified_msg_origin,on_demand=True)
         plugin.engine.dispatch.assert_awaited_once_with(item, manual=True)
 
     async def test_no_match_has_terminal_reply(self):
@@ -60,7 +60,7 @@ class ManualCommand(unittest.IsolatedAsyncioTestCase):
 
     async def test_command_uses_current_group(self):
         plugin,event=await self.run_command({'title':'Test'},target='demo:GroupMessage:20001')
-        plugin.engine.prepare.assert_awaited_once_with('demo:GroupMessage:20001')
+        plugin.engine.prepare.assert_awaited_once_with('demo:GroupMessage:20001',on_demand=True)
         plugin.engine.dispatch.assert_awaited_once()
 
 
@@ -112,7 +112,7 @@ class DiscoveryTool(unittest.IsolatedAsyncioTestCase):
         first = await self.plugin.discover_fresh_content(self.event, '新奇小游戏')
         second = await self.plugin.discover_fresh_content(self.event, '甜品')
         self.assertEqual(first,second)
-        self.plugin.engine.prepare.assert_awaited_once_with(self.event.unified_msg_origin,topic='新奇小游戏')
+        self.plugin.engine.prepare.assert_awaited_once_with(self.event.unified_msg_origin,topic='新奇小游戏',on_demand=True)
         self.plugin.engine.dispatch.assert_awaited_once_with({'title':'Test'},manual=True)
         self.event.stop_event.assert_called_once()
 
@@ -141,7 +141,7 @@ class DiscoveryTool(unittest.IsolatedAsyncioTestCase):
         self.plugin.engine.config['group_sessions']=[target]
         self.event.unified_msg_origin=target
         await self.plugin.discover_fresh_content(self.event,'游戏')
-        self.plugin.engine.prepare.assert_awaited_once_with(target,topic='游戏')
+        self.plugin.engine.prepare.assert_awaited_once_with(target,topic='游戏',on_demand=True)
         self.plugin.engine.dispatch.assert_awaited_once()
 
 
