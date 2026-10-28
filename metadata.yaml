@@ -1,0 +1,7 @@
+name: astrbot_plugin_whale_discovery
+display_name: 小鲸鱼的新鲜事
+author: Natsume0129
+version: 1.1.0
+desc: 筛选趣闻与诱人美食，随机私聊分享，含静默时段、每日总限额和去重。
+astrbot_version: ">=4.29.0"
+repo: https://github.com/Natsume0129/deepseek-LookingForSomeTrouble

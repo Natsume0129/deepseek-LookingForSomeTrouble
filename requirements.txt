@@ -1,0 +1,4 @@
+aiohttp>=3.11,<4
+beautifulsoup4>=4.12,<5
+Pillow>=11,<14
+tzdata>=2024.1

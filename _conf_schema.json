@@ -1,0 +1,98 @@
+{
+  "enabled": {
+    "description": "启用定时分享",
+    "type": "bool",
+    "default": false,
+    "hint": "默认关闭，配置好接收者后开启。"
+  },
+  "recipients": {
+    "description": "随机私聊接收会话",
+    "type": "list",
+    "default": [],
+    "hint": "每行填 机器人ID:FriendMessage:用户ID，并加入AstrBot白名单。所有接收人共享每日限额。",
+    "items": {
+      "type": "string"
+    }
+  },
+  "sources": {
+    "description": "选择信源（可多选）",
+    "type": "list",
+    "default": [
+      "justonecookbook",
+      "solidot",
+      "ithome",
+      "nasa"
+    ],
+    "hint": "justonecookbook=日式美食；solidot=科技趣闻；ithome=数码游戏；nasa=太空自然。清空后不抓取信源。",
+    "items": {
+      "type": "string"
+    },
+    "options": [
+      "justonecookbook",
+      "solidot",
+      "ithome",
+      "nasa"
+    ]
+  },
+  "interests": {
+    "description": "兴趣偏好",
+    "type": "text",
+    "default": "动物趣事、真实有趣冷知识、新奇玩具小游戏、漂亮自然太空、看起来好吃的美食。",
+    "hint": "用自然语言描述想分享什么。仅在所选信源内筛选，不进行全网搜索。"
+  },
+  "avoid_topics": {
+    "description": "不感兴趣的话题",
+    "type": "text",
+    "default": "股价、行业通稿、常规硬件参数、战争灾难、猎奇伤害、营销广告。",
+    "hint": "用自然语言描述不希望主动分享的主题。"
+  },
+  "sharing_windows": {
+    "description": "允许分享的时间段",
+    "type": "list",
+    "default": [
+      "10:00-13:00",
+      "16:00-19:00",
+      "21:00-23:50"
+    ],
+    "hint": "HH:MM-HH:MM，可多段、可跨午夜，如22:00-02:00。结束时刻不包含在内，静默时段优先。清空表示不分享。",
+    "items": {
+      "type": "string"
+    }
+  },
+  "daily_min": {
+    "description": "每日随机分享机会：最少",
+    "type": "int",
+    "default": 1,
+    "hint": "0至24，不得大于最多次数。没有好内容、离线、时间不足会少发，不保证达到最少次数。"
+  },
+  "daily_max": {
+    "description": "每日随机分享机会：最多",
+    "type": "int",
+    "default": 3,
+    "hint": "0至24。所有接收人合计的硬上限。与最少次数相同表示固定机会数。"
+  },
+  "min_interval_minutes": {
+    "description": "两次分享最小间隔（分钟）",
+    "type": "int",
+    "default": 180,
+    "hint": "1至1440，跨日期仍生效。时间段不足时减少机会。"
+  },
+  "timezone": {
+    "description": "时区",
+    "type": "string",
+    "default": "Asia/Shanghai",
+    "hint": "IANA时区，例如Asia/Shanghai或Asia/Tokyo，按该时区自然日计数。"
+  },
+  "quiet_start": {
+    "description": "静默开始 HH:MM",
+    "type": "string",
+    "default": "03:00",
+    "hint": "开始时刻包含在内。"
+  },
+  "quiet_end": {
+    "description": "静默结束 HH:MM",
+    "type": "string",
+    "default": "09:30",
+    "hint": "支持跨午夜。起止相同表示全天静默。"
+  }
+}
