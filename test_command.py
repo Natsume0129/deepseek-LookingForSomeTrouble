@@ -7,7 +7,7 @@ import sys
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 from astrbot.api.event import MessageEventResult
 from astrbot.core.pipeline.context_utils import call_handler
@@ -56,6 +56,35 @@ class ManualCommand(unittest.IsolatedAsyncioTestCase):
         plugin, event = await self.run_command(None)
         self.assertEqual(event.send.await_count, 2)
         plugin.engine.dispatch.assert_not_awaited()
+
+
+class ShareDelivery(unittest.IsolatedAsyncioTestCase):
+    async def test_image_then_separate_lines_then_optional_meme(self):
+        plugin = object.__new__(WhaleDiscovery)
+        plugin.context = types.SimpleNamespace(send_message=AsyncMock(return_value=True))
+        plugin.engine = types.SimpleNamespace(config={})
+        plugin.logger = logging.getLogger('delivery-test')
+        item = dict(target='demo:FriendMessage:10001', image='article.jpg',
+                    messages=['欸你看', '好蓝啊', '有点神'], source='NASA',
+                    url='https://www.nasa.gov/example', meme='happy.gif')
+        with patch('discovery_command_test.main.asyncio.sleep', new_callable=AsyncMock):
+            self.assertTrue(await plugin.deliver(item))
+        chains = [call.args[1].chain for call in plugin.context.send_message.await_args_list]
+        self.assertEqual([type(chain[0]).__name__ for chain in chains], ['Image','Plain','Plain','Plain','Image'])
+        self.assertEqual([chains[i][0].text for i in (1,2,3)],item['messages'])
+        self.assertFalse(any('https://' in getattr(c[0],'text','') for c in chains))
+
+    async def test_source_switch_and_no_meme_choice(self):
+        plugin = object.__new__(WhaleDiscovery)
+        plugin.context = types.SimpleNamespace(send_message=AsyncMock(return_value=True))
+        plugin.engine = types.SimpleNamespace(config={'show_source':True})
+        item = dict(target='demo:FriendMessage:10001', image=None, messages=['欸你看','有点神'],
+                    source='NASA',url='https://www.nasa.gov/example',meme=None)
+        with patch('discovery_command_test.main.asyncio.sleep', new_callable=AsyncMock):
+            self.assertTrue(await plugin.deliver(item))
+        chains=[call.args[1].chain for call in plugin.context.send_message.await_args_list]
+        self.assertEqual(len(chains),3)
+        self.assertEqual(chains[-1][0].text,'来源：NASA\nhttps://www.nasa.gov/example')
 
 
 if __name__ == '__main__':

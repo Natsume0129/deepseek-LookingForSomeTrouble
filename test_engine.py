@@ -146,6 +146,20 @@ class SharingLimits(unittest.IsolatedAsyncioTestCase):
         self.assertIn('烘焙和猫咪',prompt)
         self.assertIn('手机发布会',prompt)
 
+    async def test_model_selects_optional_meme_and_short_messages(self):
+        article=dict(title='Test sky',url='https://www.nasa.gov/example',category='太空自然',source='NASA')
+        self.engine.candidates=AsyncMock(return_value=[article])
+        self.engine.persona=AsyncMock(return_value='随意聊天')
+        self.engine.memes=AsyncMock(return_value={'happy':{'description':'开心','files':['happy.gif']}})
+        self.engine.generate=AsyncMock(side_effect=['{"indices":[0]}','{"share":true,"interesting":9,"messages":["欸你看","好蓝啊","有点神"],"meme_category":"happy"}'])
+        html=('<article>'+('Article facts. '*25)+'</article>').encode()
+        with patch('engine.fetch',new_callable=AsyncMock,return_value=(html,article['url'])):
+            result=await self.engine.prepare(self.config['recipients'][0])
+        self.assertEqual(result['messages'],['欸你看','好蓝啊','有点神'])
+        self.assertEqual(result['meme'],'happy.gif')
+        self.assertNotIn('https://',result['text'])
+        self.assertEqual(result['url'],article['url'])
+
 
 if __name__=='__main__':
     unittest.main()

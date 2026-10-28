@@ -1,4 +1,10 @@
 {
+  "show_source": {
+    "description": "展示来源链接",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后在短句后另发来源名称和原文链接。关闭时仍保存来源用于去重。"
+  },
   "enabled": {
     "description": "启用定时分享",
     "type": "bool",

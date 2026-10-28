@@ -1,5 +1,8 @@
 import asyncio
 import json
+import importlib
+import random
+from pathlib import Path
 
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.provider import ProviderRequest
@@ -13,7 +16,7 @@ class WhaleDiscovery(Star):
         super().__init__(context)
         self.config = config
         self.engine = Discovery(StarTools.get_data_dir('astrbot_plugin_whale_discovery'), config,
-                                self.generate, self.deliver, self.allowed, self.persona, self.logger)
+                                self.generate, self.deliver, self.allowed, self.persona, self.logger, self.meme_options)
         self.task = None
         self.manual_lock = asyncio.Lock()
 
@@ -50,10 +53,54 @@ class WhaleDiscovery(Star):
         return result.completion_text
 
     async def deliver(self, item):
-        chain = MessageChain().message(item['text'])
+        chains = []
         if item['image']:
-            chain.file_image(item['image'])
-        return await self.context.send_message(item['target'], chain)
+            chains.append(MessageChain().file_image(item['image']))
+        chains.extend(MessageChain().message(line) for line in item['messages'])
+        if self.engine.config.get('show_source', False):
+            chains.append(MessageChain().message('来源：' + item['source'] + '\n' + item['url']))
+        for index, chain in enumerate(chains):
+            if index:
+                await asyncio.sleep(random.uniform(0.8, 1.6))
+            if not await self.context.send_message(item['target'], chain):
+                return False
+        if item.get('meme'):
+            try:
+                await asyncio.sleep(random.uniform(0.8, 1.6))
+                await self.context.send_message(item['target'], MessageChain().file_image(item['meme']))
+            except Exception as exc:
+                self.logger.warning('Optional meme delivery failed (%s)', type(exc).__name__)
+        return True
+
+    async def meme_options(self, target):
+        # Optional integration with meme_manager 5.x's pack resolver.
+        star = self.context.get_registered_star('meme_manager')
+        if not star or not star.activated or not star.star_cls:
+            return {}
+        try:
+            base = star.star_cls.__class__.__module__.rsplit('.', 1)[0]
+            resolver = importlib.import_module(base + '.backend.packs.resolver')
+            categories = importlib.import_module(base + '.backend.packs.categories')
+            pid = self.context.get_config(target)['agent_runner']['config']['persona']['persona_id']
+            packs = resolver.resolve_pack_context(session_id=target, persona_id=pid)
+            result = {}
+            for category, description in packs['category_mapping'].items():
+                if category in ('_review', 'needs_review'):
+                    continue
+                files = []
+                for directory in packs['pack_dirs'].values():
+                    root = (Path(directory) / 'memes').resolve()
+                    folder = categories.resolve_safe_category_directory(root, category)
+                    if folder.is_dir():
+                        files.extend(p for p in folder.iterdir() if p.is_file()
+                                     and p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.gif', '.webp')
+                                     and p.resolve().is_relative_to(root))
+                if files:
+                    result[category] = {'description': str(description), 'files': files}
+            return result
+        except Exception as exc:
+            self.logger.info('Meme integration unavailable (%s)', type(exc).__name__)
+            return {}
 
     async def loop(self):
         await asyncio.sleep(60)
