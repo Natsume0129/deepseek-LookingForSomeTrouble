@@ -156,14 +156,15 @@ class Discovery:
                 due = midnight + timedelta(minutes=m)
                 self.db.execute('INSERT OR IGNORE INTO slots(day,slot,due) VALUES(?,?,?)', (day, index, due.isoformat()))
 
-    def can_send(self, now):
-        if (not self.config.get('enabled') or quiet(now, self.config)
-                or not any(in_window(now.hour * 60 + now.minute, w) for w in self.config['sharing_windows'])):
+    def can_send(self, now, manual=False):
+        if not self.config.get('enabled') or quiet(now, self.config):
+            return False
+        if not manual and not any(in_window(now.hour * 60 + now.minute, w) for w in self.config['sharing_windows']):
             return False
         limit = self.config['daily_max']
         count = self.db.execute('SELECT count(*) FROM shares WHERE day=?', (now.date().isoformat(),)).fetchone()[0]
         last = self.db.execute('SELECT at FROM shares ORDER BY id DESC LIMIT 1').fetchone()
-        return count < limit and (not last or now - datetime.fromisoformat(last[0]) >= timedelta(minutes=self.config['min_interval_minutes']))
+        return count < limit and (manual or not last or now - datetime.fromisoformat(last[0]) >= timedelta(minutes=self.config['min_interval_minutes']))
 
     async def candidates(self):
         candidates = []
@@ -266,11 +267,11 @@ class Discovery:
                 self.logger.warning('Candidate skipped: %s (%s)', article['source'], type(exc).__name__)
         return None
 
-    async def dispatch(self, item):
+    async def dispatch(self, item, manual=False):
         # Recheck after network/LLM work: preparation may cross the quiet boundary.
         async with self.lock:
             now = self.now()
-            if not self.can_send(now) or item['target'] not in self.config['recipients'] or not self.allowed(item['target']):
+            if not self.can_send(now, manual=manual) or item['target'] not in self.config['recipients'] or not self.allowed(item['target']):
                 return False
             try:
                 with self.db:

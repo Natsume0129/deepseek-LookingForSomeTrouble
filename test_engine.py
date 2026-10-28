@@ -108,6 +108,25 @@ class SharingLimits(unittest.IsolatedAsyncioTestCase):
         self.clock=self.clock.replace(hour=11)
         self.assertFalse(await self.engine.dispatch(self.item()))
 
+    async def test_manual_skips_schedule_but_respects_cap(self):
+        self.engine.config['sharing_windows']=['18:00-19:00']
+        self.assertFalse(self.engine.can_send(self.clock))
+        for index in range(3):
+            self.assertTrue(await self.engine.dispatch(self.item(index), manual=True))
+        self.assertFalse(await self.engine.dispatch(self.item(99), manual=True))
+        self.assertEqual(len(self.sent),3)
+
+    async def test_manual_respects_quiet_disabled_and_recipient(self):
+        self.clock=self.clock.replace(hour=3)
+        self.assertFalse(await self.engine.dispatch(self.item(),manual=True))
+        self.clock=self.clock.replace(hour=10)
+        self.engine.config['enabled']=False
+        self.assertFalse(await self.engine.dispatch(self.item(),manual=True))
+        self.engine.config['enabled']=True
+        self.engine.allowed=lambda _:False
+        self.assertFalse(await self.engine.dispatch(self.item(),manual=True))
+        self.assertEqual(self.sent,[])
+
     async def test_only_selected_sources_are_fetched(self):
         self.engine.config['sources']=['nasa']
         with patch('engine.fetch',new_callable=AsyncMock,return_value=(b'<rss><channel/></rss>','https://www.nasa.gov/feed/')) as mocked:
