@@ -87,5 +87,48 @@ class ShareDelivery(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(chains[-1][0].text,'来源：NASA\nhttps://www.nasa.gov/example')
 
 
+class DiscoveryTool(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.plugin = object.__new__(WhaleDiscovery)
+        target = 'demo:FriendMessage:10001'
+        self.plugin.engine = types.SimpleNamespace(
+            config={'recipients':[target]}, now=Mock(), can_send=Mock(return_value=True),
+            prepare=AsyncMock(return_value={'title':'Test'}), dispatch=AsyncMock(return_value=True),
+        )
+        self.plugin.allowed = Mock(return_value=True)
+        self.plugin.manual_lock = asyncio.Lock()
+        self.plugin.logger = logging.getLogger('tool-test')
+        extras = {}
+        self.event = types.SimpleNamespace(unified_msg_origin=target, get_extra=extras.get,
+                                           set_extra=extras.__setitem__, stop_event=Mock())
+
+    async def test_tool_sends_once_and_passes_topic(self):
+        first = await self.plugin.discover_fresh_content(self.event, '新奇小游戏')
+        second = await self.plugin.discover_fresh_content(self.event, '甜品')
+        self.assertEqual(first,second)
+        self.plugin.engine.prepare.assert_awaited_once_with(self.event.unified_msg_origin,topic='新奇小游戏')
+        self.plugin.engine.dispatch.assert_awaited_once_with({'title':'Test'},manual=True)
+        self.event.stop_event.assert_called_once()
+
+    async def test_tool_respects_existing_limits(self):
+        self.plugin.engine.can_send.return_value=False
+        result=await self.plugin.discover_fresh_content(self.event)
+        self.assertIn('额度',result)
+        self.plugin.engine.prepare.assert_not_awaited()
+        self.event.stop_event.assert_not_called()
+
+    async def test_tool_reports_no_results_without_sending(self):
+        self.plugin.engine.prepare.return_value=None
+        result=await self.plugin.discover_fresh_content(self.event,'甜品')
+        self.assertIn('没有挑到',result)
+        self.plugin.engine.dispatch.assert_not_awaited()
+        self.event.stop_event.assert_not_called()
+
+    async def test_tool_does_not_send_to_unlisted_session(self):
+        self.event.unified_msg_origin='demo:GroupMessage:20001'
+        await self.plugin.discover_fresh_content(self.event)
+        self.plugin.engine.prepare.assert_not_awaited()
+
+
 if __name__ == '__main__':
     unittest.main()
