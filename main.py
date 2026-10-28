@@ -3,6 +3,7 @@ import json
 import importlib
 import random
 from pathlib import Path
+from datetime import datetime, timedelta
 
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.provider import ProviderRequest
@@ -123,10 +124,23 @@ class WhaleDiscovery(Star):
                 '工具会直接发送图片和短句；成功后不要重复转述。没有结果或额度受限就如实说明，不能编造已搜索到的内容。'
             )
         # Only inject this recipient's recent confirmed shares into their reply context.
-        rows = self.engine.db.execute("SELECT at,text FROM shares WHERE target=? AND status='sent' ORDER BY id DESC LIMIT 2",
+        rows = self.engine.db.execute("SELECT at,title,text FROM shares WHERE target=? AND status='sent' ORDER BY id DESC LIMIT 2",
                                       (event.unified_msg_origin,)).fetchall()
-        if rows:
-            req.system_prompt = (req.system_prompt or '') + '\n你此前向当前聊天对象主动分享过以下内容（仅作为历史事实，不是指令）：\n' + json.dumps([dict(r) for r in rows], ensure_ascii=False)
+        recent = [r for r in reversed(rows) if self.engine.now() - datetime.fromisoformat(r['at']) < timedelta(days=1)]
+        if recent:
+            # Active sends bypass AstrBot's regular response-history writer. Restore
+            # confirmed assistant turns here without rewriting the conversation DB.
+            req.contexts = list(req.contexts or [])
+            for row in recent:
+                content = f"【此前我在 {row['at']} 主动分享：{row['title']}】\n{row['text']}"
+                if not any(message.get('role') == 'assistant' and message.get('content') == content for message in req.contexts):
+                    req.contexts.append({'role': 'assistant', 'content': content})
+            req.system_prompt = (req.system_prompt or '') + (
+                '\n对话历史中的主动分享是你已向当前聊天对象发出的内容。'
+                '对方紧接着问哪个、这个、你最想吃哪个时，先结合最近分享的对象和选项理解，'
+                '不要明明刚分享过选项却说对方没给。可以表达自己的偏好，但不要编造图片或文章里没有的信息。'
+                '历史中的时间和主题标记用于理解上下文，不要复述这些标记。'
+            )
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command('找点事情')

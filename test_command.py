@@ -3,10 +3,12 @@
 import asyncio
 import importlib
 import logging
+import sqlite3
 import sys
 import types
 import unittest
 from pathlib import Path
+from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 from astrbot.api.event import MessageEventResult
@@ -115,6 +117,7 @@ class DiscoveryTool(unittest.IsolatedAsyncioTestCase):
         result=await self.plugin.discover_fresh_content(self.event)
         self.assertIn('额度',result)
         self.plugin.engine.prepare.assert_not_awaited()
+
         self.event.stop_event.assert_not_called()
 
     async def test_tool_reports_no_results_without_sending(self):
@@ -128,6 +131,29 @@ class DiscoveryTool(unittest.IsolatedAsyncioTestCase):
         self.event.unified_msg_origin='demo:GroupMessage:20001'
         await self.plugin.discover_fresh_content(self.event)
         self.plugin.engine.prepare.assert_not_awaited()
+
+
+class SharedContext(unittest.IsolatedAsyncioTestCase):
+    async def test_followup_contains_own_confirmed_share_without_duplicates(self):
+        db=sqlite3.connect(':memory:');db.row_factory=sqlite3.Row
+        self.addCleanup(db.close)
+        db.execute('CREATE TABLE shares(id INTEGER PRIMARY KEY,at TEXT,target TEXT,title TEXT,text TEXT,status TEXT)')
+        db.executemany('INSERT INTO shares VALUES(?,?,?,?,?,?)',[
+            (1,'2026-10-28T12:00:00+09:00','demo:FriendMessage:10001','泡面','蓝色是鸡盐味，褐色是豚骨','sent'),
+            (2,'2026-10-28T12:01:00+09:00','demo:FriendMessage:10002','另一个人的话题','私人内容','sent'),
+            (3,'2026-10-28T12:02:00+09:00','demo:FriendMessage:10001','没确认发出的','不该出现','uncertain'),
+        ])
+        plugin=object.__new__(WhaleDiscovery)
+        plugin.engine=types.SimpleNamespace(db=db,config={'enabled':False},now=lambda:datetime.fromisoformat('2026-10-28T12:03:00+09:00'))
+        event=types.SimpleNamespace(unified_msg_origin='demo:FriendMessage:10001')
+        req=types.SimpleNamespace(system_prompt='既有人设',contexts=[{'role':'user','content':'之前的聊天'}])
+        await plugin.remember_share(event,req)
+        self.assertEqual(req.contexts[-1]['role'],'assistant')
+        self.assertIn('鸡盐味',req.contexts[-1]['content'])
+        self.assertNotIn('私人内容',str(req.contexts))
+        self.assertNotIn('不该出现',str(req.contexts))
+        await plugin.remember_share(event,req)
+        self.assertEqual(len(req.contexts),2)
 
 
 if __name__ == '__main__':
